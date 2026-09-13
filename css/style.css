@@ -1,0 +1,507 @@
+/* TOEIC 词汇学习 — 简洁清爽风格 */
+
+:root {
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --border: #e6e8ec;
+  --text: #24292f;
+  --muted: #8b949e;
+  --brand: #2f6fed;
+  --brand-soft: #eaf1ff;
+  --new: #f97316;        /* 生词：橙色 */
+  --new-soft: #fff1e6;
+  --known: #16a34a;      /* 熟词：绿色 */
+  --known-soft: #e9f9ef;
+  --radius: 12px;
+  --btn: 40px;           /* 图标 / 口音按钮的基准触控尺寸，平板下自动升到 48px */
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 6px 18px -8px rgba(16, 24, 40, .12);
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.muted { color: var(--muted); font-size: 13px; }
+.hidden { display: none !important; }
+.spacer { flex: 1; }
+.grow { flex: 1; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- 顶部导航 ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 22px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: .2px; }
+
+.filters { display: flex; gap: 4px; padding: 3px; background: var(--bg); border-radius: 999px; }
+
+.chip {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chip:hover { color: var(--text); }
+.chip.is-active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
+.chip.is-active[data-filter="new"] { color: var(--new); }
+.chip.is-active[data-filter="known"] { color: var(--known); }
+
+.search input {
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 12px;
+  width: 190px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+.search input:focus { outline: 2px solid var(--brand-soft); border-color: var(--brand); }
+
+.actions { display: flex; gap: 8px; margin-left: auto; }
+
+.btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:hover { background: var(--bg); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-accent { background: var(--new); border-color: var(--new); color: #fff; font-weight: 600; }
+.btn-accent:hover { background: #ea6a0c; }
+.btn-new.is-on { background: var(--new-soft); border-color: var(--new); color: var(--new); font-weight: 600; }
+.btn-known.is-on { background: var(--known-soft); border-color: var(--known); color: var(--known); font-weight: 600; }
+
+/* 弹窗顶部的一排图标按钮（朗读 / 关闭）：同样吃 --btn，平板上手指好点 */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--btn); height: var(--btn); padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.icon-btn:hover { background: var(--bg); }
+.icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 通用触控按钮：词条与例句上的「美 / 英」「慢」，正方形且够大，单手拇指也能点准 */
+.tbtn {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  min-width: var(--btn); height: var(--btn); padding: 0 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel); color: var(--muted);
+  font: inherit; font-size: 15px; line-height: 1;
+  cursor: pointer; user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.tbtn:hover { color: var(--brand); border-color: var(--brand); background: var(--brand-soft); }
+.tbtn:active { transform: translateY(1px); }
+.tbtn:focus-visible, .ex-line:focus-visible, .card-word:focus-visible {
+  outline: 2px solid var(--brand); outline-offset: 2px;
+}
+
+.link { border: 0; background: none; color: var(--brand); font: inherit; font-size: 13px; padding: 2px 0; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+
+.overall { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); min-width: 150px; }
+.overall .bar { flex: 1; height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.overall .bar > i { display: block; height: 100%; background: var(--known); border-radius: 999px; }
+
+/* ---------- 布局 ---------- */
+.layout { display: flex; gap: 22px; align-items: flex-start; padding: 22px; max-width: 1240px; margin: 0 auto; }
+
+.sidebar { width: 236px; flex: none; position: sticky; top: 76px; }
+.side-title { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 4px 0 10px; }
+
+.topic-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+.topic-item {
+  position: relative;
+  width: 100%;
+  display: block;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.topic-item:hover { border-color: #cfd6e0; }
+.topic-item.is-active { border-color: var(--brand); background: var(--brand-soft); }
+.topic-item .t-name { font-weight: 600; font-size: 14px; }
+.topic-item .t-meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.topic-item .t-bar { height: 4px; margin-top: 7px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.topic-item .t-bar > i { display: block; height: 100%; background: var(--known); }
+.topic-item .t-new { color: var(--new); font-weight: 600; }
+.topic-item .t-del {
+  position: absolute; top: 8px; right: 8px;
+  border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px;
+  border-radius: 6px; padding: 1px 5px;
+}
+.topic-item .t-del:hover { color: #dc2626; background: #fee2e2; }
+
+.side-foot { border-top: 1px dashed var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+
+.content { flex: 1; min-width: 0; }
+.content-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.content-head h2 { margin: 0 0 2px; font-size: 20px; }
+.counters { margin-left: auto; display: flex; gap: 8px; font-size: 12px; }
+.counters span { padding: 3px 9px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); color: var(--muted); }
+.counters .c-new b { color: var(--new); }
+.counters .c-known b { color: var(--known); }
+
+/* ---------- 词汇卡片（每个词条独占一行 · 单面展示全部字段） ---------- */
+.cards {
+  container-type: inline-size;   /* 按卡片可用宽度而非视口排版：侧栏收起 / 平板横屏时自动展开 */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "top"
+    "head"
+    "defs"
+    "ex"
+    "foot";
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  padding: 16px 18px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow-wrap: break-word;
+}
+.card.is-mark-new { border-color: var(--new); }
+.card.is-mark-known { border-color: var(--known); }
+
+.card-top { grid-area: top; display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.part-badge {
+  font-size: 11.5px; font-weight: 600; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 999px; padding: 2px 10px; white-space: nowrap;
+}
+
+/* 词条行：第一行单词（点击朗读）居左、美 / 英按钮居右，第二行音标 + 词性 */
+.card-head {
+  grid-area: head;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 12px;
+  min-width: 0;
+}
+.card-word {
+  display: inline-flex; align-items: center; gap: 8px;
+  justify-self: start; min-width: 0; margin: 0; padding: 6px 0;
+  border: 0; background: none; font: inherit;
+  font-size: 26px; font-weight: 680; letter-spacing: .2px;
+  color: var(--text); cursor: pointer; text-align: left;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.card-word .w-text { overflow-wrap: anywhere; }
+.card-word:hover .w-text { color: var(--brand); }
+.card-word .w-speak { font-size: 16px; opacity: .4; }
+.card-word:hover .w-speak { opacity: 1; }
+.acc-group { grid-column: 2; display: flex; align-items: center; gap: 8px; }
+.card-meta { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: baseline; gap: 2px 14px; flex-wrap: wrap; }
+.card-meta:empty { display: none; }
+.card-phonetic { color: var(--muted); font-size: 15px; }
+.card-pos { color: var(--brand); font-size: 13.5px; font-style: italic; }
+
+/* 释义：英文注释 + 中文注释 */
+.card-defs { grid-area: defs; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.def-en { margin: 0; font-size: 14px; color: #57606a; line-height: 1.55; }
+.def-cn { margin: 0; font-size: 16.5px; font-weight: 620; color: var(--text); line-height: 1.5; }
+
+/* 例句：整行可点（两种口音各读一遍），下面一排是单口音试听与慢速，再下方中文译文 */
+.ex-block {
+  grid-area: ex;
+  --ex-indent: 40px;            /* 与 .ex-speak 宽度对齐，让工具排和译文落在句子起始处 */
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--border);
+}
+.ex-line {
+  display: flex; align-items: flex-start; gap: 10px;
+  min-width: 0; border-radius: 10px;
+  font-size: 15px; line-height: 1.55; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.ex-line .ex-en { flex: 1; min-width: 0; }
+.ex-line:hover .ex-en { color: var(--brand); }
+.ex-cn { font-size: 14px; margin: 0; padding-left: var(--ex-indent); color: var(--muted); }
+.ex-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-left: var(--ex-indent); }
+
+/* 整句朗读图标（行本身已是大的点击区，图标只作视觉提示） */
+.ex-speak {
+  flex: none; margin-top: 1px; width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--panel); color: var(--muted); font-size: 14px; line-height: 1;
+}
+.ex-line:hover .ex-speak { color: var(--brand); border-color: var(--brand); background: var(--brand-soft); }
+
+/* 口音按钮：点一下只听该口音一遍，不改全局默认；is-on 标出当前默认口音 */
+.acc-btn { font-weight: 650; }
+.tbtn.is-on, .acc-btn.is-on { color: var(--brand); border-color: var(--brand); background: var(--brand-soft); font-weight: 680; }
+.ex-slow { font-size: 14px; }
+
+.card-foot {
+  grid-area: foot;
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--bg);
+}
+.card-foot .mini {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 76px; min-height: calc(var(--btn) - 6px); padding: 0 14px;
+  font-size: 13.5px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.card-foot .mini:hover { color: var(--text); background: var(--bg); }
+.card-foot .mini.on-new { background: var(--new-soft); border-color: var(--new); color: var(--new); font-weight: 600; }
+.card-foot .mini.on-known { background: var(--known-soft); border-color: var(--known); color: var(--known); font-weight: 600; }
+
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.badge-new { background: var(--new-soft); color: var(--new); }
+.badge-known { background: var(--known-soft); color: var(--known); }
+
+.empty { text-align: center; color: var(--muted); padding: 50px 0; }
+
+/* 宽行有余量：左列词条 + 释义，右列例句 + 译文，一行一个词也不显得句子排在长边尾端 */
+@container cards (min-width: 780px) {
+  .card {
+    grid-template-columns: minmax(300px, 46%) minmax(0, 1fr);
+    grid-template-areas:
+      "top  top"
+      "head ex"
+      "defs ex"
+      "foot foot";
+    column-gap: 22px;
+    padding: 16px 20px 12px;
+  }
+  .ex-block {
+    margin-top: 0; padding: 2px 0 0 22px; border-top: 0;
+    border-left: 1px dashed var(--border);
+  }
+}
+
+/* ---------- 卡片翻面结构（仅用于放大浏览 / 复习弹窗） ---------- */
+.card-inner {
+  position: relative;
+  width: 100%;
+  display: grid;              /* 两面同占一格，卡片高度随内容自适应 */
+  transition: transform .45s ease;
+  transform-style: preserve-3d;
+}
+.card-face {
+  grid-area: 1 / 1;
+  min-width: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow-wrap: break-word;
+}
+.card-back { transform: rotateY(180deg); }
+.back-pos { font-size: 13px; color: var(--brand); font-style: italic; }
+.back-defs { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------- 单卡浏览 / 复习 ---------- */
+.viewer {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(23, 28, 35, .55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.viewer-inner {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .45);
+}
+.viewer-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.viewer-top strong { font-size: 15px; }
+.viewer-index { font-size: 13px; color: var(--muted); }
+.tag { font-size: 11px; font-weight: 600; color: var(--new); background: var(--new-soft); border-radius: 999px; padding: 2px 9px; }
+
+.flipper { perspective: 1400px; cursor: pointer; }
+.flipper .card-inner { position: relative; width: 100%; min-height: 320px; height: auto; transition: transform .45s ease; transform-style: preserve-3d; }
+.flipper .card-inner.is-flipped { transform: rotateY(180deg); }
+.flipper .card-face { padding: 26px; justify-content: center; gap: 8px; }
+.flipper .card-word { font-size: 40px; }
+.flipper .card-phonetic { font-size: 18px; }
+.flipper .def-en { font-size: 16px; }
+.flipper .def-cn { font-size: 22px; }
+.flipper .ex-line { font-size: 17px; }
+.flipper .ex-cn { font-size: 15px; }
+.flipper .ex-speak { width: 32px; height: 32px; }
+
+.viewer-bottom { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+.viewer-hint { text-align: center; margin: 10px 0 0; }
+
+/* ---------- 发音设置 ---------- */
+.tts-inner { max-width: 520px; }
+.tts-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.tts-label { width: 62px; flex: none; font-size: 13px; color: var(--muted); }
+.tts-select {
+  flex: 1; min-width: 0; font: inherit; font-size: 13.5px; color: var(--text);
+  padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+}
+.tts-select:focus { outline: 2px solid var(--brand-soft); border-color: var(--brand); }
+.tts-choices { display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; }
+.tts-choices label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.tts-row input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--brand); }
+.tts-sub { margin: -8px 0 12px 72px; font-size: 12.5px; line-height: 1.5; }
+.tts-speed-out { width: 46px; flex: none; text-align: right; font-size: 13px; color: var(--muted); }
+.tts-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.tts-tip { margin: 10px 0 0; line-height: 1.55; }
+
+/* 离线音频（PWA）：统计文字与按钮同排，窄屏自动换行 */
+.tts-offline { flex-direction: row; flex: 1; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tts-offline .btn { white-space: nowrap; }
+.tts-offline .link { white-space: nowrap; }
+
+/* 安装入口用品牌色区分，避免和右侧「只看生词」的橙色抢视线 */
+.btn-install { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); font-weight: 600; }
+.btn-install:hover { background: #dfeaff; }
+
+/* 正在朗读时给顶部入口一个可见反馈（音频起播本身没有提示音） */
+body.is-speaking #ttsBtn { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+
+/* ---------- 提示条 ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(10px);
+  background: #24292f; color: #fff; font-size: 13px;
+  padding: 10px 16px; border-radius: 10px;
+  opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+  z-index: 60; max-width: 80%;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- 响应式：平板 / 手机 ---------- */
+@media (max-width: 960px) {
+  .layout { flex-direction: column; padding: 16px; gap: 14px; }
+  .sidebar { width: 100%; position: static; }
+  .side-title { display: none; }
+  .topic-list { flex-direction: row; overflow-x: auto; padding-bottom: 6px; gap: 10px; }
+  .topic-item { width: 190px; flex: none; }
+  .side-foot { display: none; }
+  .overall { order: 5; width: 100%; min-width: 0; }
+  .actions { order: 4; }
+}
+
+@media (max-width: 640px) {
+  .topbar { padding: 10px 14px; gap: 10px; }
+  .search { order: 5; flex: 1; }
+  .search input { width: 100%; }
+  .actions { margin-left: 0; flex-wrap: wrap; }
+  .card { padding: 14px 14px 10px; }
+  .flipper .card-inner { min-height: 360px; }
+}
+
+/* ---------- 触屏 / 平板：按钮按 48px 触控标准放大 ----------
+ * 用 pointer:coarse 而非宽度判断，是因为平板横屏时宽度够但手指仍需要更大的点区；
+ * --btn 一变，口音按钮、图标按钮、卡片底部动作按钮会一起跟着放大。 */
+@media (pointer: coarse) {
+  :root { --btn: 48px; }
+  body { font-size: 16px; }
+  .tbtn { font-size: 17px; padding: 0 14px; }
+  .icon-btn { font-size: 18px; padding: 0 12px; }
+  .ex-speak { width: 38px; height: 38px; font-size: 17px; }
+  .ex-block { --ex-indent: 48px; }
+  .card-word { padding: 10px 0; }
+  .card-foot .mini { min-height: var(--btn); font-size: 15px; }
+  .btn { min-height: var(--btn); font-size: 14.5px; padding: 8px 14px; }
+  .chip { padding: 10px 18px; font-size: 14.5px; }
+  .search input { font-size: 16px; padding: 11px 14px; }
+  .counters span { padding: 8px 12px; font-size: 13px; }
+  .topic-item { padding: 14px; }
+  .topic-item .t-del { width: 36px; height: 36px; top: 4px; right: 4px; font-size: 16px; }
+  .tts-choices { gap: 10px; }
+  .tts-choices label { min-height: 44px; font-size: 15px; }
+  .tts-select { font-size: 15px; padding: 11px 10px; }
+  .tts-row input[type="range"] { min-height: 40px; }
+  .viewer-hint { display: none; }        /* 快捷键提示对触屏没意义 */
+}
+
+/* 只在键鼠环境下才收紧离线音频那一排的按钮，触屏沿用上面的 48px 触控标准 */
+@media (pointer: fine) {
+  .tts-offline .btn { min-height: 34px; padding: 5px 12px; font-size: 13px; }
+}
+
+/* ---------- PWA 独立窗口：避开刘海与系统手势条 ----------
+ * 装在桌面后没有浏览器地址栏兜底，安全区得自己留；
+ * 放在文件末尾是为了盖过上面按宽度断点写的 padding。 */
+@supports (padding: env(safe-area-inset-top)) {
+  @media (display-mode: standalone) {
+    .topbar {
+      padding-top: calc(12px + env(safe-area-inset-top));
+      padding-left: calc(22px + env(safe-area-inset-left));
+      padding-right: calc(22px + env(safe-area-inset-right));
+    }
+    .layout {
+      padding-left: calc(22px + env(safe-area-inset-left));
+      padding-right: calc(22px + env(safe-area-inset-right));
+      padding-bottom: calc(22px + env(safe-area-inset-bottom));
+    }
+    .toast { bottom: calc(28px + env(safe-area-inset-bottom)); }
+    .viewer { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  }
+  /* 窄屏那一档的 padding 写在上面的宽度断点里，这里跟着覆盖一遍 */
+  @media (display-mode: standalone) and (max-width: 640px) {
+    .topbar { padding-top: calc(10px + env(safe-area-inset-top)); padding-left: calc(14px + env(safe-area-inset-left)); padding-right: calc(14px + env(safe-area-inset-right)); }
+    .layout { padding-left: calc(16px + env(safe-area-inset-left)); padding-right: calc(16px + env(safe-area-inset-right)); }
+  }
+}

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="1200 个托业词汇 / 30 个单元 / 美音英音 / 生词复习，可离线使用的纯前端学习应用">
+<meta name="theme-color" content="#ffffff">
+<title>TOEIC 词汇学习</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TOEIC 词汇">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1 class="brand"><span aria-hidden="true">📗</span> TOEIC 词汇</h1>
+
+  <nav class="filters" id="filters" aria-label="按标记状态筛选">
+    <button type="button" class="chip is-active" data-filter="all">全部</button>
+    <button type="button" class="chip" data-filter="new">生词</button>
+    <button type="button" class="chip" data-filter="known">熟词</button>
+    <button type="button" class="chip" data-filter="unmarked">未标记</button>
+  </nav>
+
+  <label class="search">
+    <span class="visually-hidden">搜索词汇</span>
+    <input type="search" id="searchInput" placeholder="检索全部单元：单词 / 释义 / 例句…">
+  </label>
+
+  <div class="actions">
+    <button type="button" class="btn btn-install hidden" id="installBtn" title="把应用装到桌面，离线也能用">📲 安装到桌面</button>
+    <button type="button" class="btn hidden" id="updateBtn" title="发现新版本，点击更新">↻ 更新</button>
+    <button type="button" class="btn btn-accent" id="reviewBtn" title="用生词卡片开始复习">🔥 只看生词</button>
+    <button type="button" class="btn" id="ttsBtn" title="发音设置：选择语音、音源与语速">🔊 发音</button>
+    <button type="button" class="btn" id="importBtn">导入 JSON</button>
+    <button type="button" class="btn" id="exportBtn" title="导出全部词库（含自定义）为 JSON">导出</button>
+  </div>
+
+  <div class="overall" id="overallProgress" title="全部词汇的掌握进度"></div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <h2 class="side-title">单元</h2>
+    <ul class="topic-list" id="topicList"></ul>
+    <div class="side-foot">
+      <p class="muted" id="customTip">导入的自定义词库会显示在这里。</p>
+      <button type="button" class="link" id="templateBtn">下载导入模板</button>
+      <button type="button" class="link" id="resetBtn">清空所有标记</button>
+    </div>
+  </aside>
+
+  <main class="content">
+    <div class="content-head">
+      <div>
+        <h2 id="topicTitle">—</h2>
+        <p class="muted" id="topicMeta"></p>
+      </div>
+      <div class="counters" id="counters"></div>
+    </div>
+    <div class="cards" id="cards"></div>
+    <p class="empty hidden" id="emptyTip">没有符合当前条件的词汇。</p>
+  </main>
+</div>
+
+<!-- 单卡浏览 / 生词复习模式 -->
+<div class="viewer hidden" id="viewer" role="dialog" aria-modal="true" aria-label="词汇卡片">
+  <div class="viewer-inner">
+    <div class="viewer-top">
+      <strong id="viewerTitle">—</strong>
+      <span class="tag hidden" id="viewerTag">复习模式</span>
+      <span class="spacer"></span>
+      <span class="viewer-index" id="viewerIndex"></span>
+      <button type="button" class="icon-btn" id="vSpeak" title="按当前默认口音朗读单词（快捷键 P）">🔊</button>
+      <button type="button" class="icon-btn acc-btn" id="vSpeakUs" data-accent="us" title="只用美音朗读单词">美</button>
+      <button type="button" class="icon-btn acc-btn" id="vSpeakGb" data-accent="gb" title="只用英音朗读单词（Shift + P 用另一口音对比）">英</button>
+      <button type="button" class="icon-btn" id="vSpeakEx" title="朗读例句：两种口音各读一遍（快捷键 S）">🔤</button>
+      <button type="button" class="icon-btn" id="vSpeakExSlow" title="按当前默认口音慢速朗读例句（Shift + S）">慢</button>
+      <button type="button" class="icon-btn" id="vSpeakBoth" title="连读：单词 + 例句（快捷键 D）">🔁</button>
+      <button type="button" class="icon-btn" id="vClose" title="关闭（Esc）">✕</button>
+    </div>
+
+    <div class="flipper" id="viewerFlip" title="点击卡片翻面（空格）">
+      <div class="flip-inner" id="viewerCard"></div>
+    </div>
+
+    <div class="viewer-bottom">
+      <button type="button" class="btn" id="vPrev">← 上一个</button>
+      <button type="button" class="btn btn-new" id="vNew">标为生词</button>
+      <button type="button" class="btn" id="vFlip">翻转卡片</button>
+      <button type="button" class="btn btn-known" id="vKnown">标为熟词</button>
+      <button type="button" class="btn" id="vNext">下一个 →</button>
+    </div>
+    <p class="muted viewer-hint">快捷键：← → 切换 · 空格 翻转 · 1 生词 · 2 熟词 · P 朗读单词 · Shift + P 换口音读单词 · S 朗读例句（英、美各一遍）· Shift + S 慢速 · D 连读单词与例句 · Esc 关闭</p>
+  </div>
+</div>
+
+<!-- 发音设置：语音、音源、语速倍率 -->
+<div class="viewer hidden" id="ttsPanel" role="dialog" aria-modal="true" aria-label="发音设置">
+  <div class="viewer-inner tts-inner">
+    <div class="viewer-top">
+      <strong>🔊 发音设置</strong>
+      <span class="spacer"></span>
+      <button type="button" class="icon-btn" id="ttsClose" title="关闭（Esc）">✕</button>
+    </div>
+
+    <div class="tts-row">
+      <span class="tts-label">口音</span>
+      <div class="tts-choices">
+        <label><input type="radio" name="ttsAccent" value="us">美音（en-US）</label>
+        <label><input type="radio" name="ttsAccent" value="gb">英音（en-GB）</label>
+      </div>
+    </div>
+    <p class="muted tts-sub" id="ttsAccentNote"></p>
+
+    <label class="tts-row">
+      <span class="tts-label">合成语音</span>
+      <select class="tts-select" id="ttsVoiceSel"></select>
+    </label>
+
+    <div class="tts-row">
+      <span class="tts-label">音源</span>
+      <div class="tts-choices">
+        <label><input type="radio" name="ttsSource" value="auto">自动（有当前口音的预生成音频则优先）</label>
+        <label><input type="radio" name="ttsSource" value="synthesis">仅浏览器合成语音</label>
+        <label><input type="radio" name="ttsSource" value="audio">仅预生成音频</label>
+      </div>
+    </div>
+
+    <label class="tts-row">
+      <span class="tts-label">语速倍率</span>
+      <input type="range" id="ttsSpeed" min="0.7" max="1.25" step="0.05" value="1">
+      <output class="tts-speed-out" id="ttsSpeedOut">1.00×</output>
+    </label>
+
+    <div class="tts-row" id="offlineRow">
+      <span class="tts-label">离线音频</span>
+      <div class="tts-choices tts-offline">
+        <span class="muted" id="offlineStat">离线音频：统计中…</span>
+        <span class="grow"></span>
+        <button type="button" class="btn" id="offlineBtn" title="把全部预生成发音存进手机，断网也能听">全部缓存到本地</button>
+        <button type="button" class="btn hidden" id="offlineCancel">取消</button>
+        <button type="button" class="link" id="offlineClear" title="只清发音缓存，不影响生词标记">清除缓存</button>
+      </div>
+    </div>
+    <p class="muted tts-sub" id="offlineNote">听过的词会自动留在本机；需要完整离线时点上面那个按钮。</p>
+
+    <div class="tts-foot">
+      <span class="muted" id="ttsCoverage"></span>
+      <span class="grow"></span>
+      <button type="button" class="btn" id="ttsPreview">试听当前语音</button>
+      <button type="button" class="btn" id="ttsReplay">重播上一条</button>
+    </div>
+    <p class="muted tts-tip" id="ttsTip"></p>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".json,application/json,text/plain" hidden>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/data.js"></script>
+<script src="js/tts-text.js"></script>
+<script src="js/audio-manifest.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/app.js"></script>
+<script src="js/pwa.js"></script>
+</body>
+</html>

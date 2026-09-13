@@ -1,0 +1,30 @@
+{
+  "topic": "我的错词本",
+  "icon": "📝",
+  "words": [
+    {
+      "word": "example",
+      "phonetic": "/ɪɡˈzɑːmpl/",
+      "pos": "n.",
+      "meaning": "例子，范例",
+      "example": "This is a good example.",
+      "exampleCn": "这是一个好例子。"
+    },
+    {
+      "word": "commencement",
+      "phonetic": "/kəˈmensmənt/",
+      "pos": "n.",
+      "meaning": "开始，开端；毕业典礼",
+      "example": "The commencement of the project is scheduled for April.",
+      "exampleCn": "项目计划于四月启动。"
+    },
+    {
+      "word": "shortage",
+      "phonetic": "/ˈʃɔːtɪdʒ/",
+      "pos": "n.",
+      "meaning": "短缺，不足",
+      "example": "The company is facing a severe labor shortage.",
+      "exampleCn": "该公司正面临严重的劳动力短缺。"
+    }
+  ]
+}
