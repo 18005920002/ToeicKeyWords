@@ -1,0 +1,82 @@
+name: Build Android APK
+
+# 手动触发为主；推送到 main 且改了 Web/原生相关文件时自动重建
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "manifest.webmanifest"
+      - "sw.js"
+      - "css/**"
+      - "js/**"
+      - "audio/**"
+      - "icons/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - "package-lock.json"
+      - "android/**"
+      - "tools/prepare-web.mjs"
+      - "tools/make-android-icons.ps1"
+      - ".github/workflows/build-android.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node (Capacitor CLI 7 需要 Node >=20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Capacitor 7 生成的工程 Java 兼容性为 VERSION_21，必须用 JDK 21 编译
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # compileSdk / targetSdk = 35
+      - name: Install Android platform 35
+        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Install npm deps
+        run: npm ci
+
+      # 只把运行需要的文件（含 4800 条 mp3）拷进 www/
+      - name: Prepare web assets
+        run: npm run prepare:web
+
+      # www/ -> android/app/src/main/assets/public/，并更新原生工程
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: chmod +x ./gradlew && ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: toeic-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30

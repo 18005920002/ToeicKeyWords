@@ -1,0 +1,23 @@
+# --- Node / Capacitor 构建产物 ---
+node_modules/
+
+# 由 tools/prepare-web.mjs 生成的干净 Web 目录（含 105MB 音频副本，勿入库）
+www/
+
+# cap sync 会把 www 复制进这里；同样不入库，交给 CI 每次重新生成，避免音频在 git 里存三份
+android/app/src/main/assets/public/
+
+# Gradle / Android Studio 本地产物
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+*.apk
+*.aab
+
+# 日志 / 临时
+npm-debug.*
+*.tsbuildinfo
+
+# 本地凭据笔记，绝不入库
+docs/token.md

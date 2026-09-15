@@ -216,6 +216,19 @@ window.Pwa = (function () {
     var note = $('#offlineNote');
     audioTotal = audioFiles().length;
 
+    /* Capacitor 原生 App：index.html/css/js 与 4800 条 mp3 全部打进安装包，由 WebView
+     * 内置的本地服务器直接供给，天然离线可用。这里不再注册 Service Worker，
+     * 免得与 Capacitor 自己的请求拦截重复（部分 WebView 版本会因此卡在首屏/更新）。
+     * 「离线音频」面板那套缓存管理在原生里也没意义，一并禁用并说明原因。 */
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+      if (note) note.textContent = 'App 已内置全部发音，断网也能听，无需额外缓存。';
+      var nb = $('#offlineBtn');
+      if (nb) { nb.disabled = true; nb.title = 'App 内置资源，无需缓存'; }
+      var cl = $('#offlineClear');
+      if (cl) cl.classList.add('hidden');
+      return;
+    }
+
     if (!('serviceWorker' in navigator)) {
       if (note) note.textContent = '当前浏览器不支持 Service Worker，只能用浏览器合成语音朗读。';
       return;

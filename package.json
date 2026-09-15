@@ -1,0 +1,16 @@
+{
+  "name": "toeic-keywords",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TOEIC 词汇学习 PWA —— 用 Capacitor 打包成 Android APK",
+  "scripts": {
+    "prepare:web": "node tools/prepare-web.mjs",
+    "sync": "npm run prepare:web && cap sync android",
+    "build:debug": "npm run sync && cd android && gradlew assembleDebug"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^7.6.9"
+  }
+}
