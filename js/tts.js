@@ -24,6 +24,11 @@
   var playSeq = 0;            // 递增即作废所有在播/待播的音频
   var audioBroken = false;    // 一次失败后本轮不再等待，避免每次点击都卡 1.2 秒
   var audioFails = {};        // 已经取不到的音频文件名，同个文件不再重试
+  var queueTimer = null;      // 单元连读的段间等待（含 3 秒词条间隔）
+  var queueAudio = null;      // 单元连读正在播的那一个 Audio，停止时能立即 pause
+  var queueSeq = 0;           // queueAudio / queueTimer 属于哪一条队列，不让旧队列收尾时误伤新的
+  var queueAbort = null;      // 被别的朗读抢掉时，用它把卡在「等音频 ended」里的队列叫醒去收尾
+  var queueAbortSeq = 0;
 
   /* 语速档位：慢速单独一档。原先整句固定 0.8 会拉长元音、破坏节奏，是「不像真人」的直接原因 */
   var RATE = { word: 0.95, sentence: 1, slow: 0.72 };
@@ -121,8 +126,11 @@
 
   /* Chrome 已知问题：cancel() 后同一帧 speak() 会被静默丢弃；朗读超过约 15 秒会自行截断。
    * 因此等引擎确认空闲再排入，并在播放期间定时 pause/resume 续命。 */
-  /* 同一次会话里可以混排多种口音：每条 item 自带 acc 就用它自己的语音，否则用传入的默认口音 */
-  function speakItems(items, slow, acc) {
+  /* 同一次会话里可以混排多种口音：每条 item 自带 acc 就用它自己的语音，否则用传入的默认口音。
+   * seq 由调用方给定：单次朗读传 null（等真正有内容要播才作废上一路），
+   * 单元连读则一路传同一个 seq，免得队列被自己作废。
+   * onDone 在最后一句播完后回调；silent 时不广播播放状态（连读期间由队列首尾统一管）。 */
+  function speakSteps(items, slow, acc, seq, onDone, silent) {
     if (!SS) return false;
     var defAcc = normAcc(acc || accent());
     if (!hasVoices()) refreshVoices();
@@ -141,12 +149,11 @@
       };
     }).filter(function (t) { return t.text; });
     if (!texts.length) return false;
+    if (seq == null) seq = claimSeq();   // 单次朗读：确定有内容要播才作废上一路
 
-    playSeq++;
-    var seq = playSeq;
     var attempts = 0;
 
-    emitState(true);
+    if (!silent) emitState(true);
     function launch() {
       if (seq !== playSeq) return;                            // 已被更新的朗读请求取代，状态由它接管
       if ((SS.speaking || SS.pending) && attempts++ < 12) { setTimeout(launch, 50); return; }
@@ -163,8 +170,9 @@
         if (i === texts.length - 1) {                          // 只以最后一句的结束作为整段结束
           u.onend = u.onerror = function () {
             if (seq !== playSeq) return;
-            clearKeepAlive();
-            emitState(false);
+            /* 连读队列里下一段马上接上，状态不能在这一句结束时就关掉 */
+            if (!silent) { clearKeepAlive(); emitState(false); }
+            if (onDone) onDone();
           };
         }
         SS.speak(u);                                          // 同一次会话内排队，引擎自己衔接句间停顿
@@ -173,6 +181,10 @@
     if (SS.speaking || SS.pending) { try { SS.cancel(); } catch (e) { } }
     setTimeout(launch, 15);
     return true;
+  }
+
+  function speakItems(items, slow, acc) {
+    return speakSteps(items, slow, acc, null, null, false);
   }
 
   /* ================= 预生成音频播放 ================= */
@@ -214,7 +226,7 @@
   }
 
   function playChain(urls, slow, onFail) {
-    var seq = ++playSeq;
+    var seq = claimSeq();
     emitState(true);
     var rate = clampRate((slow ? RATE.slow : 1) * num(prefs.get(PREF.speed, 1), 1));
     (function next() {
@@ -261,7 +273,79 @@
     })();
   }
 
+  /* 连读队列用的单文件播放：容错与 playChain 一致，但只播一段，
+   * 且把元素记下来，「停止连读」时能立刻 pause 掉正在响的那一条 */
+  function playAudioStep(url, seq, rate, onDone, onFail, onBlocked) {
+    var el = new global.Audio(url);
+    var settled = false;
+    var started = false;
+    queueAudio = el;
+    queueSeq = seq;
+    function leave() { if (queueAudio === el) { queueAudio = null; } }
+    function done() {
+      if (settled || seq !== playSeq) return;
+      settled = true; leave();
+      onDone();
+    }
+    function bail() {
+      if (settled || seq !== playSeq) return;
+      settled = true; leave();
+      /* 单个文件缺失（该口音没生成、或断网又没缓存）不该关掉整条音频链路：
+       * 只记下这个文件不再重试，累计两个不同文件失败才判定音频整体不可用 */
+      if (url) audioFails[url] = 1;
+      if (Object.keys(audioFails).length >= 2) audioBroken = true;
+      onFail();
+    }
+    el.addEventListener('error', bail);
+    el.addEventListener('loadedmetadata', function () {
+      el.playbackRate = rate;
+      /* 慢速靠变速而非重新合成：保留原语者的音高与语调轮廓 */
+      try { el.preservesPitch = true; } catch (e) { }
+      try { el.mozPreservesPitch = true; } catch (e) { }
+      try { el.webkitPreservesPitch = true; } catch (e) { }
+    });
+    el.addEventListener('playing', function () { started = true; });
+    el.addEventListener('ended', done);
+    var p = el.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(function (err) {
+        if (started || seq !== playSeq) return;
+        /* 浏览器自动播放限制：不是音频坏了，停下来等用户手势，也别记进 audioFails */
+        if (/not allowed|gesture|permission/i.test(String((err && (err.name || err.message)) || ''))) {
+          started = true;
+          settled = true; leave();
+          if (onBlocked) onBlocked(); else onFail();
+        } else {
+          bail();
+        }
+      });
+    }
+    /* file:// 下缺文件常不触发 error，1.2 秒仍未就绪即判定不可用 */
+    setTimeout(function () { if (!started && !el.readyState) bail(); }, 1200);
+  }
+
   /* ================= 工具 ================= */
+
+  /* 开一路新的朗读：作废在播的那一路，顺手拆掉连读队列的等待与元件。
+   * 光递增 playSeq 不够：正在播的那条 mp3 不会被 pause，它的 ended 回来看见 seq 不对就直接返回，
+   * 队列永远等不到推进、按钮会一直停在「停止连读」，所以必须主动把队列叫醒去走 interrupted 收尾。 */
+  function claimSeq() {
+    var prev = playSeq;
+    playSeq++;
+    clearTimeout(queueTimer);
+    queueTimer = null;
+    if (queueAudio) {
+      var el = queueAudio;
+      queueAudio = null;
+      try { el.pause(); } catch (e) { }
+    }
+    if (queueAbort && queueAbortSeq === prev) {
+      var f = queueAbort;
+      queueAbort = null; queueAbortSeq = 0;
+      setTimeout(f, 0);
+    }
+    return playSeq;
+  }
 
   function clampRate(r) { return Math.max(0.5, Math.min(1.6, r || 1)); }
   function num(v, d) { var n = parseFloat(v); return isNaN(n) ? d : n; }
@@ -328,6 +412,121 @@
     return speakItems(seq, slow);
   }
 
+  /* ================= 单元连读队列 ================= */
+
+  /* 同一句例句连读两遍之间的轻停；词条之间由调用方传 gapMs（3 秒） */
+  var REPEAT_GAP_MS = 600;
+
+  /* 把一个单元的词条展开成扁平步骤序列：
+   *   单词 accOrder[0] → accOrder[1]
+   *   例句 accOrder[0] × 2 → accOrder[1] × 2（同一条 mp3 连播两遍，不重新生成）
+   *   词条之间插一个 wait；例句两遍之间插一个轻停
+   * 口音先后跟着全局默认口音走，与卡片上「例句两种口音各读一遍」保持一致。 */
+  function buildUnitSteps(words, gapMs) {
+    var accs = orderedAccents(ACCENTS);
+    var steps = [];
+    (words || []).forEach(function (w, i) {
+      if (i) steps.push({ type: 'wait', ms: gapMs, i: i });
+      accs.forEach(function (acc) {
+        steps.push({ type: 'seg', i: i, kind: 'word', acc: acc, round: 1, word: w, key: w.key, text: w.word });
+      });
+      if (!w.example) return;
+      accs.forEach(function (acc) {
+        for (var r = 1; r <= 2; r++) {
+          steps.push({ type: 'seg', i: i, kind: 'example', acc: acc, round: r, word: w, key: w.key, text: w.example });
+          if (r < 2) steps.push({ type: 'wait', ms: REPEAT_GAP_MS, i: i });
+        }
+      });
+    });
+    steps.forEach(function (s) { if (s.type === 'seg') s.url = audioUrl(s, s.acc); });
+    return steps;
+  }
+
+  /* 逐段推进的播放队列：一个 seq 贯穿到底，段末回调接下一段。
+   * 不做「整轮一次性决定音源」：一个单元 40 词，只因为某一个口音的 mp3 缺失就把整轮全部退回合成音太不合理，
+   * 所以逐段判断「有音频用音频、没音频用合成音」，两者都没有的段记 skipped 后跳过。 */
+  function playQueue(steps, opts) {
+    opts = opts || {};
+    if (!steps || !steps.length) return false;
+    var seq = claimSeq();
+    var idx = 0, skipped = 0, timer = null;
+    queueAbort = function () { step(); };
+    queueAbortSeq = seq;
+    emitState(true);
+
+    function finish(reason, extra) {
+      clearTimeout(timer);
+      if (queueTimer === timer) queueTimer = null;
+      if (queueSeq === seq) { queueAudio = null; queueSeq = 0; }
+      if (queueAbortSeq === seq) { queueAbort = null; queueAbortSeq = 0; }
+      /* 被新一轮朗读抢掉时状态由它接管，这里不能反手把「正在朗读」关掉 */
+      if (seq === playSeq) { clearKeepAlive(); emitState(false); }
+      var info = { skipped: skipped };
+      if (extra) Object.keys(extra).forEach(function (k) { info[k] = extra[k]; });
+      if (opts.onEnd) opts.onEnd(reason, info);
+    }
+
+    /* 每一步的推进回调只允许生效一次，看门狗与正常结束撞车时不会多跳一段 */
+    function once(fn) {
+      var fired = false;
+      return function () { if (fired) return; fired = true; fn(); };
+    }
+
+    /* 3 秒等待后紧接着要播下一条，提前一个空 Audio 元件让浏览器（或 SW cache-first）先把文件拿下来 */
+    function warmNext() {
+      for (var j = idx; j < steps.length; j++) {
+        var s = steps[j];
+        if (s.type !== 'seg') continue;
+        if (s.url && !audioFails[s.url]) { try { new global.Audio(s.url); } catch (e) { } }
+        return;
+      }
+    }
+
+    function rate() { return clampRate(num(prefs.get(PREF.speed, 1), 1)); }
+
+    function synthStep(step, next) {
+      if (!SS) { skipped++; next(); return; }
+      var go = once(next);
+      var ok = speakSteps([{ kind: step.kind, key: step.key, text: step.text }], false, step.acc, seq, go, true);
+      /* 引擎偶发挂死（没语音、onend 不回调）不能把整个单元卡在一段上 */
+      if (ok) {
+        setTimeout(function () {
+          if (seq === playSeq) go();
+        }, 12000 + String(step.text || '').length * 140);
+      } else {
+        skipped++;
+        next();
+      }
+    }
+
+    function step() {
+      if (seq !== playSeq) { finish('interrupted'); return; }
+      if (idx >= steps.length) { finish('done'); return; }
+      var s = steps[idx++];
+      if (opts.onStep) opts.onStep(s, idx - 1);
+      if (s.type === 'wait') {
+        timer = setTimeout(step, s.ms || 0);
+        queueTimer = timer;
+        queueSeq = seq;
+        return;
+      }
+      warmNext();
+      var next = once(step);
+      var src = prefs.get(PREF.source, 'auto');
+      if (s.url && src !== 'synthesis' && !audioBroken) {
+        playAudioStep(s.url, seq, rate(), next,
+          function () { if (src === 'audio') { skipped++; next(); } else { synthStep(s, next); } },
+          function () { finish('blocked'); });
+        return;
+      }
+      if (src === 'audio') { skipped++; next(); return; }    // 用户锁定音频但该段没音频 → 跳过
+      synthStep(s, next);
+    }
+
+    step();
+    return true;
+  }
+
   var api = {
     RATE: RATE,
     ACCENTS: ACCENTS,
@@ -388,11 +587,32 @@
     speakExampleAccents: function (word, slow, accs) { return play(word, 'example', !!slow, orderedAccents(accs || ACCENTS)); },
     accentOrder: function (accs) { return orderedAccents(accs || ACCENTS); },
     speakBoth: function (word, slow, acc) { return play(word, 'both', !!slow, acc); },
+    /* 单元连读：按「单词美/英各一遍 + 例句美/英各两遍 + 词条间 gapMs」顺序播完 words，
+     * opts: { gapMs, onStep(step), onEnd(reason, info) }；reason 为 done / stopped / interrupted / blocked */
+    playUnitWords: function (words, opts) {
+      var o = opts || {};
+      return playQueue(buildUnitSteps(words, o.gapMs > 0 ? o.gapMs : 3000), o);
+    },
+    /* 连读队列预计段数（给按钮 title 算时长用）：每词 2 段单词 + 有例句则 4 段例句 */
+    unitStepCount: function (words) {
+      return (words || []).reduce(function (n, w) { return n + 2 + (w.example ? 4 : 0); }, 0);
+    },
+    unitAccents: function () { return orderedAccents(ACCENTS); },
+    unitStepLabel: function (step) {
+      if (!step || step.type !== 'seg') return '';
+      var label = ACC_LABEL[normAcc(step.acc)] + (step.kind === 'word' ? ' · 单词' : ' · 例句');
+      return step.round > 1 ? label + ' 第 ' + step.round + ' 遍' : label;
+    },
     preview: function (text, acc) {
       return speakItems([{ kind: 'example', key: '__preview__', text: text || 'Please submit the expense report before Friday.' }], false, acc);
     },
     replay: function () { return last ? play(last.word, last.kind, last.slow, last.accents || last.accent) : false; },
-    stop: function () { playSeq++; clearKeepAlive(); if (SS) { try { SS.cancel(); } catch (e) { } } emitState(false); },
+    stop: function () {
+      claimSeq();
+      clearKeepAlive();
+      if (SS) { try { SS.cancel(); } catch (e) { } }
+      emitState(false);
+    },
     onVoicesChanged: function (cb) { changedCbs.push(cb); cb(); },
     onState: function (cb) { stateCbs.push(cb); }
   };

@@ -11,7 +11,9 @@
     filter: 'all',
     search: '',
     flipped: {},
-    viewer: { open: false, list: [], index: 0, mode: 'browse', flipped: false }
+    viewer: { open: false, list: [], index: 0, mode: 'browse', flipped: false },
+    /* 单元连读：只记当前播到哪一段，卡片高亮靠 data-key 回填，不重建 DOM */
+    unitPlay: { active: false, list: [], total: 0, index: -1, step: null, card: null, timer: null }
   };
 
   /* 侧栏首项“全部单元”的虚拟 id：用于浏览全部词条与承载跨单元检索 */
@@ -368,6 +370,9 @@
     empty.textContent = (state.search && state.search.trim())
       ? '没有匹配「' + state.search.trim() + '」的词汇，换个关键词或筛选条件试试。'
       : '当前筛选条件下没有词汇（点上方「全部」查看所有）。';
+    /* 卡片重建完了再把连读的高亮贴回去，否则标一个生词就会丢当前词 */
+    syncPlayBtn(scope, words);
+    syncPlayHighlight();
   }
 
   function renderOverall() {
@@ -395,6 +400,7 @@
       toast(mode === 'review' ? '还没有生词，先在卡片上标记“生词”吧' : '当前筛选下没有词汇');
       return;
     }
+    if (state.unitPlay.active) stopUnitPlay();        // 一次只听一路，免得弹层里点朗读跟连读抢嘴
     state.viewer = {
       open: true,
       list: list,
@@ -492,6 +498,7 @@
   }
 
   function selectTopic(id) {
+    if (state.unitPlay.active) stopUnitPlay();
     state.topicId = id;
     state.flipped = {};
     Store.setPref('topicId', id);
@@ -522,6 +529,152 @@
       t.words.forEach(function (w) { if (markOf(w) === 'new') list.push(w); });
     });
     openViewer(list, 0, 'review');
+  }
+
+  /* ================= 单元连读 ================= */
+
+  var UNIT_GAP_MS = 3000;
+  var PLAY_IDLE = '▶ 单元连读';
+  var PLAY_STOP = '⏹ 停止连读';
+
+  function unitPlayBtn() { return $('#unitPlayBtn'); }
+
+  function setPlayBtn(label, on) {
+    var b = unitPlayBtn();
+    if (!b) return;
+    b.textContent = label;
+    b.classList.toggle('is-on', !!on);
+  }
+
+  /* 正在播的那张卡片：连读期间不重绘网格，只按 data-key 找元素改 class */
+  function playCard() {
+    var st = state.unitPlay;
+    if (!st.active || !st.card) return null;
+    return $('#cards .card[data-key="' + st.card.key + '"]');
+  }
+
+  function clearPlayHighlight() {
+    $$('#cards .card.is-playing').forEach(function (c) { c.classList.remove('is-playing'); });
+    $$('#cards .is-now').forEach(function (el) { el.classList.remove('is-now', 'is-repeat'); });
+    $$('#cards [data-acc-label]').forEach(function (el) { el.removeAttribute('data-acc-label'); });
+  }
+
+  /* 高亮当前词条，并只点亮正在播的那一行（单词 / 例句），旁边用 data-acc-label 标出口音 */
+  function syncPlayHighlight() {
+    clearPlayHighlight();
+    var st = state.unitPlay;
+    var step = st.step;
+    if (!st.active || !step || step.type !== 'seg') return;
+    var card = playCard();
+    if (!card) return;                                        // 标记 / 筛选后这条词已不在网格里，等下一段
+    card.classList.add('is-playing');
+    var line = step.kind === 'word' ? $('.card-word', card) : $('.ex-line', card);
+    if (!line) return;
+    line.classList.add('is-now');
+    if (step.round > 1) line.classList.add('is-repeat');
+    line.setAttribute('data-acc-label',
+      Tts.accentLabel(step.acc) + (step.round > 1 ? ' 第 ' + step.round + ' 遍' : ''));
+  }
+
+  function scrollPlayCard() {
+    var card = playCard();
+    if (!card || typeof card.scrollIntoView !== 'function') return;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    try { card.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' }); }
+    catch (e) { card.scrollIntoView(); }
+  }
+
+  function stopPlayTimer() {
+    var st = state.unitPlay;
+    if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+  }
+
+  /* 3 秒静默得让用户看见是在等下一条，而不是卡住了 */
+  function runCountdown(step) {
+    var st = state.unitPlay;
+    var left = Math.max(1, Math.round((step.ms || UNIT_GAP_MS) / 1000));
+    var n = step.i + 1;
+    stopPlayTimer();
+    (function tick() {
+      setPlayBtn(PLAY_STOP + ' · ' + left + ' 秒后第 ' + n + '/' + st.total + ' 词', true);
+      if (left <= 1) { st.timer = null; return; }
+      left--;
+      st.timer = setTimeout(tick, 1000);
+    })();
+  }
+
+  function onUnitStep(s) {
+    var st = state.unitPlay;
+    if (!st.active) return;
+    if (s.type === 'wait') {
+      /* 例句两遍之间的轻停：界面保持上一段不动，只有词条间的 3 秒才倒数 */
+      if (s.ms && s.ms >= 1000) runCountdown(s);
+      return;
+    }
+    stopPlayTimer();
+    st.step = s;
+    st.card = s.word;
+    setPlayBtn(PLAY_STOP + ' · ' + (s.i + 1) + '/' + st.total + ' · ' + s.word.word + ' · ' + Tts.unitStepLabel(s), true);
+    syncPlayHighlight();
+    if (s.i !== st.index) { st.index = s.i; scrollPlayCard(); }
+  }
+
+  function resetPlayUI() {
+    var st = state.unitPlay;
+    stopPlayTimer();
+    st.active = false; st.step = null; st.card = null; st.index = -1; st.list = []; st.total = 0;
+    clearPlayHighlight();
+    setPlayBtn(PLAY_IDLE, false);
+  }
+
+  function onUnitEnd(reason, info) {
+    var st = state.unitPlay;
+    if (!st.active) return;                                   // 用户自己点停止时已复位，不再提示
+    var skipped = (info && info.skipped) || 0;
+    resetPlayUI();
+    if (reason === 'interrupted') toast('已插入其他朗读，单元连读停止');
+    else if (reason === 'blocked') toast('浏览器拦住了自动播放，再点一次「单元连读」就好');
+    else if (reason === 'done') toast('本单元连读完成' + (skipped ? '（' + skipped + ' 段没有可用发音，已跳过）' : ''));
+  }
+
+  /* 连读的就是一屏所见：当前单元 + 当前筛选 / 检索条件下真正列出来的那些词 */
+  function startUnitPlay() {
+    var st = state.unitPlay;
+    if (st.active) { stopUnitPlay(); return; }
+    var words = visibleWords();
+    if (!words.length) { toast('当前筛选下没有词汇'); return; }
+    st.active = true; st.list = words; st.total = words.length; st.index = -1; st.step = null; st.card = null;
+    if (!Tts.playUnitWords(words, { gapMs: UNIT_GAP_MS, onStep: onUnitStep, onEnd: onUnitEnd })) {
+      resetPlayUI();
+      speakFailTip(null, 'example');
+      return;
+    }
+    toast('单元连读：单词' + accOrderText() + '各一遍，例句各两遍，词条之间停 3 秒');
+  }
+
+  function stopUnitPlay() {
+    var was = state.unitPlay.active;
+    resetPlayUI();
+    if (was) Tts.stop();
+  }
+
+  function accOrderText() {
+    return Tts.unitAccents().map(function (a) { return Tts.accentLabel(a); }).join('、');
+  }
+
+  /* 按钮只在单个单元视图里出现：全部单元 1200 词太长，检索结果又随时在变 */
+  function syncPlayBtn(scope, words) {
+    var b = unitPlayBtn();
+    if (!b) return;
+    var playable = !!scope.topic && !scope.searching && scope.topic.id !== ALL_ID && words.length > 0;
+    b.classList.toggle('hidden', !playable);
+    if (!playable) {
+      if (state.unitPlay.active) stopUnitPlay();
+      return;
+    }
+    var mins = Math.max(1, Math.round(words.length * 25 / 60));
+    b.title = '单元连读：' + words.length + ' 个词条，单词' + accOrderText() + '各一遍、例句' +
+      accOrderText() + '各两遍，词条之间停 3 秒（约 ' + mins + ' 分钟，再点一次停止）';
   }
 
   /* ================= 导入 / 导出 ================= */
@@ -816,6 +969,7 @@
     $('#filters').addEventListener('click', function (e) {
       var btn = e.target.closest('[data-filter]');
       if (!btn) return;
+      if (state.unitPlay.active) stopUnitPlay();        // 要听的词集变了，下一轮从头开始
       state.filter = btn.dataset.filter;
       $$('#filters .chip').forEach(function (x) { x.classList.toggle('is-active', x === btn); });
       Store.setPref('filter', state.filter);
@@ -823,9 +977,13 @@
     });
 
     $('#searchInput').addEventListener('input', function (e) {
+      if (state.unitPlay.active) stopUnitPlay();
       state.search = e.target.value || '';
       renderCards();
     });
+
+    var upb = unitPlayBtn();
+    if (upb) upb.addEventListener('click', startUnitPlay);
 
     $('#topicList').addEventListener('click', function (e) {
       var del = e.target.closest('[data-del]');
@@ -909,6 +1067,12 @@
       else if (e.key === 'd' || e.key === 'D') { speakBoth(word, false); }
       else if (e.key === '1') { if (word) markWord(word, 'new'); }
       else if (e.key === '2') { if (word) markWord(word, 'known'); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      /* 没开单卡浏览时，Esc 用来停掉单元连读 */
+      if (state.viewer.open || !state.unitPlay.active) return;
+      if (e.key === 'Escape') { e.preventDefault(); stopUnitPlay(); }
     });
 
     bindTtsPanel();

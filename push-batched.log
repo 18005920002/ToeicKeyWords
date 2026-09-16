@@ -1,0 +1,63 @@
+基准提交(origin/main) = b415a5c2823cbc61e004565fcb235826be238efd
+已回退到 b415a5c2823cbc61e004565fcb235826be238efd 并取消暂存（文件内容未改动）
+warning: in the working copy of 'android/.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/build.gradle', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/capacitor.build.gradle', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/proguard-rules.pro', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/AndroidManifest.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/java/com/toeic/keywords/MainActivity.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/res/drawable/ic_launcher_background.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/res/layout/activity_main.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/res/values/ic_launcher_background.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/res/values/strings.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/res/values/styles.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/main/res/xml/file_paths.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/src/test/java/com/getcapacitor/myapp/ExampleUnitTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/build.gradle', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/capacitor.settings.gradle', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/gradle.properties', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/gradle/wrapper/gradle-wrapper.properties', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/gradlew', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/settings.gradle', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/variables.gradle', LF will be replaced by CRLF the next time Git touches it
+>>> [05:26:05] 第 1 次尝试推送：package as Android APK via Capacitor + CI build
+<<< [05:26:13] 成功：package as Android APK via Capacitor + CI build
+>>> [05:26:15] 第 1 次尝试推送：audio unit 16
+<<< [05:27:00] 成功：audio unit 16
+>>> [05:27:02] 第 1 次尝试推送：audio unit 17
+<<< [05:28:46] 成功：audio unit 17
+>>> [05:28:47] 第 1 次尝试推送：audio unit 18
+<<< [05:30:32] 成功：audio unit 18
+>>> [05:30:33] 第 1 次尝试推送：audio unit 19
+<<< [05:31:57] 成功：audio unit 19
+>>> [05:31:58] 第 1 次尝试推送：audio unit 20
+<<< [05:33:27] 成功：audio unit 20
+>>> [05:33:28] 第 1 次尝试推送：audio unit 21
+<<< [05:34:52] 成功：audio unit 21
+>>> [05:34:53] 第 1 次尝试推送：audio unit 22
+<<< [05:37:07] 成功：audio unit 22
+>>> [05:37:09] 第 1 次尝试推送：audio unit 23
+<<< [05:37:58] 成功：audio unit 23
+>>> [05:37:59] 第 1 次尝试推送：audio unit 24
+<<< [05:39:28] 成功：audio unit 24
+>>> [05:39:29] 第 1 次尝试推送：audio unit 25
+<<< [05:41:39] 成功：audio unit 25
+>>> [05:41:41] 第 1 次尝试推送：audio unit 26
+<<< [05:43:39] 成功：audio unit 26
+>>> [05:43:40] 第 1 次尝试推送：audio unit 27
+<<< [05:45:17] 成功：audio unit 27
+>>> [05:45:19] 第 1 次尝试推送：audio unit 28
+<<< [05:45:58] 成功：audio unit 28
+>>> [05:45:59] 第 1 次尝试推送：audio unit 29
+<<< [05:47:51] 成功：audio unit 29
+>>> [05:47:53] 第 1 次尝试推送：audio unit 30
+<<< [05:49:29] 成功：audio unit 30
+================ 收尾核对 ================
+?? push-batched.log
+?? push-batched.ps1
+本地已跟踪 mp3 数：4800 （期望 4800）
+docs/token.md 是否被跟踪：False
+DONE
