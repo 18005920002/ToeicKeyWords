@@ -42,8 +42,12 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      # 默认还会安装已被 Google 下架的废弃 'tools' 包（Failed to find package 'tools'），
+      # 必须显式指定 packages 只装 platform-tools
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       # compileSdk / targetSdk = 35
       - name: Install Android platform 35
