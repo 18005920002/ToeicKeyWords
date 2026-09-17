@@ -18,35 +18,47 @@
 <body>
 
 <header class="topbar">
-  <h1 class="brand"><span aria-hidden="true">📗</span> TOEIC 词汇</h1>
+  <div class="topbar-row">
+    <h1 class="brand"><span aria-hidden="true">📗</span> TOEIC 词汇</h1>
 
-  <nav class="filters" id="filters" aria-label="按标记状态筛选">
-    <button type="button" class="chip is-active" data-filter="all">全部</button>
-    <button type="button" class="chip" data-filter="new">生词</button>
-    <button type="button" class="chip" data-filter="known">熟词</button>
-    <button type="button" class="chip" data-filter="unmarked">未标记</button>
-  </nav>
+    <div class="actions">
+      <button type="button" class="icon-btn fold-btn" id="navToggle" aria-controls="sidebar" aria-expanded="false" title="展开单元导航">📚</button>
+      <button type="button" class="icon-btn fold-btn" id="searchToggle" aria-controls="searchPanel" aria-expanded="false" title="展开搜索与筛选">🔍</button>
+      <button type="button" class="btn btn-install hidden" id="installBtn" title="把应用装到桌面，离线也能用">📲 安装到桌面</button>
+      <button type="button" class="btn hidden" id="updateBtn" title="发现新版本，点击更新">↻ 更新</button>
+      <button type="button" class="btn btn-accent" id="reviewBtn" title="用生词卡片开始复习">🔥 只看生词</button>
+      <button type="button" class="btn" id="ttsBtn" title="发音设置：选择语音、音源与语速">🔊 发音</button>
+      <button type="button" class="btn" id="importBtn">导入 JSON</button>
+      <button type="button" class="btn" id="exportBtn" title="导出全部词库（含自定义）为 JSON">导出</button>
+    </div>
 
-  <label class="search">
-    <span class="visually-hidden">搜索词汇</span>
-    <input type="search" id="searchInput" placeholder="检索全部单元：单词 / 释义 / 例句…">
-  </label>
-
-  <div class="actions">
-    <button type="button" class="btn btn-install hidden" id="installBtn" title="把应用装到桌面，离线也能用">📲 安装到桌面</button>
-    <button type="button" class="btn hidden" id="updateBtn" title="发现新版本，点击更新">↻ 更新</button>
-    <button type="button" class="btn btn-accent" id="reviewBtn" title="用生词卡片开始复习">🔥 只看生词</button>
-    <button type="button" class="btn" id="ttsBtn" title="发音设置：选择语音、音源与语速">🔊 发音</button>
-    <button type="button" class="btn" id="importBtn">导入 JSON</button>
-    <button type="button" class="btn" id="exportBtn" title="导出全部词库（含自定义）为 JSON">导出</button>
+    <div class="overall" id="overallProgress" title="全部词汇的掌握进度"></div>
   </div>
 
-  <div class="overall" id="overallProgress" title="全部词汇的掌握进度"></div>
+  <!-- 默认折叠：点顶部 🔍 展开，收起时一并清掉检索与筛选条件 -->
+  <div class="topbar-row fold-row hidden" id="searchPanel">
+    <nav class="filters" id="filters" aria-label="按标记状态筛选">
+      <button type="button" class="chip is-active" data-filter="all">全部</button>
+      <button type="button" class="chip" data-filter="new">生词</button>
+      <button type="button" class="chip" data-filter="known">熟词</button>
+      <button type="button" class="chip" data-filter="unmarked">未标记</button>
+    </nav>
+
+    <label class="search">
+      <span class="visually-hidden">搜索词汇</span>
+      <input type="search" id="searchInput" placeholder="检索全部单元：单词 / 释义 / 例句…">
+    </label>
+
+    <button type="button" class="link" id="foldClose">收起</button>
+  </div>
 </header>
 
 <div class="layout">
-  <aside class="sidebar">
-    <h2 class="side-title">单元</h2>
+  <aside class="sidebar" id="sidebar">
+    <div class="side-head">
+      <h2 class="side-title">单元</h2>
+      <button type="button" class="icon-btn side-close" id="navClose" title="收起单元导航">✕</button>
+    </div>
     <ul class="topic-list" id="topicList"></ul>
     <div class="side-foot">
       <p class="muted" id="customTip">导入的自定义词库会显示在这里。</p>
@@ -163,6 +175,13 @@
 
 <input type="file" id="fileInput" accept=".json,application/json,text/plain" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- 长按 / 选中例句中的单词后出现：把该词收进 Unit31 扩展词 -->
+<div class="sel-pop hidden" id="selPop" role="dialog" aria-label="加入扩展词">
+  <span class="sel-word" id="selWord"></span>
+  <button type="button" class="btn btn-add" id="selAdd">＋ Unit31 扩展词</button>
+  <p class="muted sel-hint">词条为选中的单词，例句沿用当前句；音标、读音、释义留占位符，后续人工补齐。</p>
+</div>
 
 <script src="js/data.js"></script>
 <script src="js/tts-text.js"></script>

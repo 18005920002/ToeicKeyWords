@@ -12,12 +12,21 @@
     search: '',
     flipped: {},
     viewer: { open: false, list: [], index: 0, mode: 'browse', flipped: false },
+    /* 顶部搜索区与侧栏单元导航：默认为折叠，给主展示区留地方 */
+    fold: { search: false, nav: false },
+    /* 长按 / 拖选中的例句单词，等待加入扩展词 */
+    sel: null,
     /* 单元连读：只记当前播到哪一段，卡片高亮靠 data-key 回填，不重建 DOM */
     unitPlay: { active: false, list: [], total: 0, index: -1, step: null, card: null, timer: null }
   };
 
   /* 侧栏首项“全部单元”的虚拟 id：用于浏览全部词条与承载跨单元检索 */
   var ALL_ID = '__all_units__';
+
+  /* 选词扩展词单：固定 id 保证多次添加都落到同一个单元，且以 custom 词库形式入本地存储 */
+  var EXT_ID = 'custom-unit-31-extension';
+  var EXT_NAME = 'Unit31 扩展词';
+  var EXT_ICON = '✨';
 
   /* ================= 工具 ================= */
 
@@ -134,7 +143,7 @@
   /* ================= 数据装配 ================= */
 
   function stripKey(w) {
-    return { word: w.word, phonetic: w.phonetic, pos: w.pos, englishDef: w.englishDef, meaning: w.meaning, example: w.example, exampleCn: w.exampleCn, part: w.part };
+    return { word: w.word, phonetic: w.phonetic, pos: w.pos, englishDef: w.englishDef, meaning: w.meaning, example: w.example, exampleCn: w.exampleCn, part: w.part, pending: !!w.pending, from: w.from };
   }
 
   function normalizeTopic(raw) {
@@ -153,6 +162,9 @@
         example: en(w && w.example, true),
         exampleCn: (w && w.exampleCn || '').trim(),
         part: (w && w.part || '').trim(),
+        /* 扩展词：只收了词条与例句，其余字段只有占位符，人工补齐后去掉该标记即恢复正常展示 */
+        pending: !!(w && w.pending),
+        from: String(w && w.from || '').trim(),
         unit: raw.name || ''
       };
       o.key = Store.wordKey(raw.id, o.word);
@@ -270,11 +282,21 @@
     return '<span class="badge" style="background:#f2f4f7;color:#8b949e">未标记</span>';
   }
 
+  /* 待补充字段的占位：只有扩展词（pending）会走到这里，人工补齐后自然消失 */
+  function pendingField(text) {
+    return '<span class="pending-field">' + escapeHtml(text) + '</span>';
+  }
+  /* 有值就正常显示，扩展词缺字段则摆个占位符 */
+  function fieldOrPending(value, text) {
+    if (value) return escapeHtml(value);
+    return text ? pendingField(text) : '';
+  }
+
   /* 释义：英文注释 + 中文注释，同卡直接展示 */
   function defsHtml(word) {
     var html = '';
-    if (word.englishDef) html += '<p class="def-en">' + escapeHtml(word.englishDef) + '</p>';
-    if (word.meaning) html += '<p class="def-cn">' + escapeHtml(word.meaning) + '</p>';
+    if (word.englishDef || word.pending) html += '<p class="def-en">' + fieldOrPending(word.englishDef, word.pending ? '英文注释待补充' : '') + '</p>';
+    if (word.meaning || word.pending) html += '<p class="def-cn">' + fieldOrPending(word.meaning, word.pending ? '中文释义待补充' : '') + '</p>';
     return html;
   }
 
@@ -293,6 +315,7 @@
         '</div>';
     }
     if (word.exampleCn) html += '<p class="ex-cn">' + escapeHtml(word.exampleCn) + '</p>';
+    if (word.from) html += '<p class="muted ex-from">例句摘自 ' + escapeHtml(word.from) + '，人工补齐时核对一下上下文</p>';
     return html + '</div>';
   }
 
@@ -310,18 +333,20 @@
     return '<article class="card' + markClass + '" data-key="' + escapeHtml(word.key) + '" data-i="' + index + '">' +
       '<div class="card-top">' +
         (tag ? '<span class="part-badge">' + escapeHtml(tag) + '</span>' : '') +
+        (word.pending ? '<span class="part-badge badge-pending">待补充</span>' : '') +
         '<span class="grow"></span>' +
         badgeHtml(mark) +
       '</div>' +
       '<div class="card-head">' +
-        '<button type="button" class="card-word" data-act="speak" title="点击按当前默认口音朗读单词">' +
+        '<button type="button" class="card-word" data-act="speak" title="' + (word.pending ? '选中的扩展词还没有预生成音频，这里用本机合成语音试读' : '点击按当前默认口音朗读单词') + '">' +
           '<span class="w-text">' + escapeHtml(word.word) + '</span>' +
           '<span class="w-speak" aria-hidden="true">🔊</span>' +
         '</button>' +
         '<span class="acc-group">' + accentPair('speak-acc', false) + '</span>' +
         '<span class="card-meta">' +
-          (word.phonetic ? '<span class="card-phonetic">' + escapeHtml(word.phonetic) + '</span>' : '') +
-          (word.pos ? '<span class="card-pos">' + escapeHtml(word.pos) + '</span>' : '') +
+          (word.phonetic || word.pending ? '<span class="card-phonetic">' + fieldOrPending(word.phonetic, word.pending ? '音标待补充' : '') + '</span>' : '') +
+          (word.pos || word.pending ? '<span class="card-pos">' + fieldOrPending(word.pos, word.pending ? '词性待补充' : '') + '</span>' : '') +
+          (word.pending ? pendingField('🔈 读音待生成') : '') +
         '</span>' +
       '</div>' +
       '<div class="card-defs">' + defsHtml(word) + '</div>' +
@@ -436,12 +461,12 @@
       '<div class="card-face card-front">' +
         '<div class="card-top">' + badgeHtml(mark) + '</div>' +
         '<h3 class="card-word">' + escapeHtml(w.word) + '</h3>' +
-        '<div class="card-phonetic">' + escapeHtml(w.phonetic) + '</div>' +
-        '<div class="muted">' + escapeHtml(w.pos) + '</div>' +
+        '<div class="card-phonetic">' + fieldOrPending(w.phonetic, w.pending ? '音标待补充' : '') + '</div>' +
+        '<div class="muted">' + (fieldOrPending(w.pos, w.pending ? '词性待补充' : '') || '&nbsp;') + '</div>' +
         (v.mode === 'review' ? '<div class="muted">点击卡片（或按空格）查看释义</div>' : '') +
       '</div>' +
       '<div class="card-face card-back">' +
-        '<div class="back-pos">' + escapeHtml(w.pos) + ' ' + escapeHtml(w.word) + ' ' + escapeHtml(w.phonetic) + '</div>' +
+        '<div class="back-pos">' + fieldOrPending(w.pos, '') + ' ' + escapeHtml(w.word) + ' ' + fieldOrPending(w.phonetic, w.pending ? '音标待补充' : '') + '</div>' +
         '<div class="back-defs">' + defsHtml(w) + '</div>' +
         exampleHtml(w, true) +
       '</div>';
@@ -504,6 +529,9 @@
     Store.setPref('topicId', id);
     renderTopics();
     renderCards();
+    /* 手机上单元导航是抽屉，选完就收回，把屏幕还给卡片 */
+    if (isNarrow()) setNavOpen(false);
+    syncFoldUI();
   }
 
   /* 删除导入的自定义主题（同时清理其标记记录） */
@@ -959,6 +987,312 @@
       if (!panel || panel.classList.contains('hidden')) return;
       if (e.key === 'Escape') closeTtsPanel();
     });
+  }
+
+  /* ================= 折叠区：顶部搜索 / 侧栏单元导航 ================= */
+
+  function isNarrow() {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 960px)').matches);
+  }
+
+  function syncFoldUI() {
+    var panel = $('#searchPanel');
+    var st = $('#searchToggle');
+    var nt = $('#navToggle');
+    /* 面板收着但条件还在生效：用小圆点提醒用户结果被筛过 */
+    var dirty = !!(state.search && state.search.trim()) || state.filter !== 'all';
+    document.body.classList.toggle('nav-open', !!state.fold.nav);
+    if (panel) panel.classList.toggle('hidden', !state.fold.search);
+    if (st) {
+      st.classList.toggle('is-on', !!state.fold.search);
+      st.classList.toggle('has-pending', dirty && !state.fold.search);
+      st.setAttribute('aria-expanded', state.fold.search ? 'true' : 'false');
+      st.title = state.fold.search ? '收起搜索与筛选' : (dirty ? '展开搜索与筛选（当前有条件在生效）' : '展开搜索与筛选：单词 / 释义 / 例句');
+    }
+    if (nt) {
+      var cur = getTopic(state.topicId);
+      nt.classList.toggle('is-on', !!state.fold.nav);
+      nt.setAttribute('aria-expanded', state.fold.nav ? 'true' : 'false');
+      nt.title = state.fold.nav ? '收起单元导航' : '展开单元导航（当前：' + ((cur && cur.name) || '未选择') + '）';
+    }
+  }
+
+  /* 收起就等于「没有条件」：不然检索词与筛选会被藏在后面继续影响列表 */
+  function clearConditions() {
+    var changed = false;
+    if (state.search) { state.search = ''; changed = true; }
+    if (state.filter !== 'all') {
+      state.filter = 'all';
+      Store.setPref('filter', 'all');
+      $$('#filters .chip').forEach(function (b) { b.classList.toggle('is-active', b.dataset.filter === 'all'); });
+      changed = true;
+    }
+    var input = $('#searchInput');
+    if (input) input.value = '';
+    if (changed && state.unitPlay.active) stopUnitPlay();
+    return changed;
+  }
+
+  function setSearchOpen(open) {
+    if (state.fold.search === open) return;
+    state.fold.search = open;
+    Store.setPref('searchOpen', open);
+    var changed = open ? false : clearConditions();
+    syncFoldUI();
+    if (changed) renderCards();
+    if (open) { $('#searchInput').focus(); }
+    else if (changed) toast('已收起搜索：同时清掉检索词与筛选条件');
+  }
+
+  function setNavOpen(open) {
+    if (state.fold.nav === open) return;
+    state.fold.nav = open;
+    Store.setPref('navOpen', open);
+    syncFoldUI();
+  }
+
+  /* ================= 例句选词 → Unit31 扩展词 ================= */
+
+  var WORD_CHAR = /[A-Za-z'’\-]/;
+  var WORD_PICK = /^[A-Za-z][A-Za-z'’\-]{1,23}$/;    // 至少两个字母，不收 a / I 这类单字母与带标点的碎段
+
+  function pickWordFromText(text) {
+    var s = String(text || '').replace(/\s+/g, ' ').trim();
+    s = s.replace(/^[^A-Za-z]+/, '').replace(/[^A-Za-z'’\-]+$/, '');
+    return s;
+  }
+
+  function unitShortName(unit) {
+    var m = String(unit || '').match(/^Unit\s+\d+/i);
+    return m ? m[0].replace(/\s+/g, ' ') : String(unit || '').trim();
+  }
+
+  /* 选中片段属于哪张卡片：网格里的卡片按 key 回查，放大浏览弹窗用当前词 */
+  function sourceWordOf(el) {
+    if (el.closest('#viewer')) return state.viewer.open ? viewerWord() : null;
+    var card = el.closest('.card');
+    return card ? findWord(card.getAttribute('data-key')) : null;
+  }
+
+  /* 选区得确实落在例句英文里，且是一个可当词条的单词，否则不弹 */
+  function selectionInfo() {
+    var sel = window.getSelection ? window.getSelection() : null;
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+    var text = pickWordFromText(sel.toString());
+    if (!WORD_PICK.test(text)) return null;
+    var node = sel.anchorNode;
+    var host = node ? (node.nodeType === 3 ? node.parentElement : node) : null;
+    var en = host && host.closest ? host.closest('.ex-en') : null;
+    if (!en) return null;
+    var src = sourceWordOf(en);
+    if (!src || !src.example) return null;
+    var rect = sel.getRangeAt(0).getBoundingClientRect();
+    if (!rect || (!rect.width && !rect.height)) return null;
+    return { text: text, rect: rect, src: src };
+  }
+
+  function hideSelPop() {
+    var pop = $('#selPop');
+    if (pop) pop.classList.add('hidden');
+  }
+
+  function clearSel() {
+    state.sel = null;
+    hideSelPop();
+  }
+
+  /* 只收起浮层，state.sel 留着：点「加入」时浏览器可能已把选区清掉了 */
+  function showSelPop(info) {
+    var pop = $('#selPop');
+    if (!pop) return;
+    state.sel = {
+      text: info.text,
+      example: info.src.example,
+      exampleCn: info.src.exampleCn || '',
+      from: (unitShortName(info.src.unit) ? unitShortName(info.src.unit) + ' · ' : '') + info.src.word
+    };
+    $('#selWord').textContent = info.text;
+    pop.classList.remove('hidden');
+    /* 贴在选区上方，放不下就翻到下方，横向夹进视口 */
+    var r = info.rect;
+    var pw = pop.offsetWidth, ph = pop.offsetHeight;
+    var left = Math.max(8, Math.min(r.left + r.width / 2 - pw / 2, window.innerWidth - pw - 8));
+    var top = r.top - ph - 10;
+    if (top < 8) top = Math.min(r.bottom + 10, Math.max(8, window.innerHeight - ph - 8));
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+  }
+
+  function onSelectionMaybe() {
+    var info = selectionInfo();
+    if (!info) { hideSelPop(); return; }
+    showSelPop(info);
+  }
+
+  function clearTextSelection() {
+    var sel = window.getSelection ? window.getSelection() : null;
+    if (sel && sel.removeAllRanges) sel.removeAllRanges();
+  }
+
+  /* 长按：光标定位到指下的词，再向两边扩到单词边界，选中后走同一套弹层 */
+  function selectWordAt(x, y) {
+    var range = null;
+    if (document.caretRangeFromPoint) range = document.caretRangeFromPoint(x, y);
+    else if (document.caretPositionFromPoint) {
+      var p = document.caretPositionFromPoint(x, y);
+      if (p && p.offsetNode) {
+        range = document.createRange();
+        range.setStart(p.offsetNode, p.offset);
+        range.collapse(true);
+      }
+    }
+    if (!range) return false;
+    var node = range.startContainer;
+    if (!node || node.nodeType !== 3 || !node.parentElement || !node.parentElement.closest('.ex-en')) return false;
+    var text = node.nodeValue || '';
+    var at = Math.max(0, Math.min(range.startOffset, text.length));
+    var s = at, e = at;
+    while (s > 0 && WORD_CHAR.test(text.charAt(s - 1))) s--;
+    while (e < text.length && WORD_CHAR.test(text.charAt(e))) e++;
+    var word = text.slice(s, e);
+    if (!WORD_PICK.test(word)) return false;
+    var r = document.createRange();
+    r.setStart(node, s);
+    r.setEnd(node, e);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    onSelectionMaybe();
+    return true;
+  }
+
+  /* 拿到（或新建）扩展词单元：以 custom 词库的形式存在 localStorage，导入导出同一路子 */
+  function extTopicOf(stored) {
+    var ext = null;
+    stored.forEach(function (t) {
+      if (t.id === EXT_ID || String(t.name).trim() === EXT_NAME) ext = t;
+    });
+    if (!ext) {
+      ext = { id: EXT_ID, name: EXT_NAME, icon: EXT_ICON, words: [] };
+      stored.push(ext);
+    }
+    if (!Array.isArray(ext.words)) ext.words = [];
+    return ext;
+  }
+
+  /* 词书里已有该词条时给出单元名，避免重复采集 */
+  function builtinHomeOf(lower) {
+    var home = '';
+    state.topics.forEach(function (t) {
+      if (t.custom || home) return;
+      t.words.forEach(function (w) {
+        if (!home && String(w.word).trim().toLowerCase() === lower) home = unitShortName(t.name);
+      });
+    });
+    return home;
+  }
+
+  function addSelToExtension() {
+    var sel = state.sel;
+    if (!sel) return;
+    var word = pickWordFromText(sel.text);
+    if (!word) { clearSel(); return; }
+    if (state.unitPlay.active) stopUnitPlay();
+
+    var lower = word.toLowerCase();
+    var stored = Store.getCustomTopics();
+    var ext = extTopicOf(stored);
+    var dup = ext.words.some(function (w) { return String(w.word).trim().toLowerCase() === lower; });
+    if (dup) {
+      toast('「' + word + '」已经在 ' + EXT_NAME + ' 里了');
+      clearSel(); clearTextSelection();
+      return;
+    }
+    /* 例句沿用当前句（含中文注释），音标 / 词性 / 注释 / 读音全部留空，卡片上展占位符 */
+    ext.words.push({
+      word: word,
+      phonetic: '', pos: '', englishDef: '', meaning: '',
+      example: sel.example, exampleCn: sel.exampleCn,
+      part: '', pending: true, from: sel.from
+    });
+    Store.setCustomTopics(stored);
+
+    var home = builtinHomeOf(lower);
+    state.topics = buildTopics();
+    clearSel();
+    clearTextSelection();
+    if (isNarrow()) state.fold.nav = false;
+    Store.setPref('navOpen', state.fold.nav);
+    state.topicId = EXT_ID;
+    Store.setPref('topicId', EXT_ID);
+    state.flipped = {};
+    renderAll();
+    syncFoldUI();
+    toast('已加入 ' + EXT_NAME + '：' + word + '（音标 / 读音 / 释义待补充）' + (home ? '，注：该词已在 ' + home : ''));
+  }
+
+  /* 选区就在被点的元素里：这次点击是选词的尾巴，不该再触发整句朗读 / 翻面 */
+  function selectionInside(el) {
+    var sel = window.getSelection ? window.getSelection() : null;
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return false;
+    if (String(sel.toString()).trim().length < 2) return false;
+    var node = sel.anchorNode;
+    var host = node ? (node.nodeType === 3 ? node.parentElement : node) : null;
+    return !!(host && host !== el && el.contains(host));
+  }
+
+  function bindFoldAndSelection() {
+    $('#searchToggle').addEventListener('click', function () { setSearchOpen(!state.fold.search); });
+    $('#navToggle').addEventListener('click', function () { setNavOpen(!state.fold.nav); });
+    $('#foldClose').addEventListener('click', function () { setSearchOpen(false); });
+    $('#navClose').addEventListener('click', function () { setNavOpen(false); });
+
+    /* 抽屉模式下点外面就收回；桌面侧栏常驻，要收就自己点 ✕ 或 📚 */
+    document.addEventListener('click', function (e) {
+      if (!state.fold.nav || !isNarrow()) return;
+      if (e.target.closest('#sidebar') || e.target.closest('#navToggle')) return;
+      setNavOpen(false);
+    });
+
+    $('#searchInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); setSearchOpen(false); }
+    });
+
+    /* 拖选 / 长按选词：selectionchange 是主通道，mousedown 上的 preventDefault 只为保住选区 */
+    document.addEventListener('selectionchange', onSelectionMaybe);
+    $('#selAdd').addEventListener('click', function (e) { e.stopPropagation(); addSelToExtension(); });
+    $('#selPop').addEventListener('mousedown', function (e) { e.preventDefault(); });
+    window.addEventListener('resize', hideSelPop);
+    document.addEventListener('scroll', hideSelPop, true);
+
+    bindLongPress();
+  }
+
+  var lp = { timer: null, x: 0, y: 0 };
+
+  function cancelLongPress() {
+    if (lp.timer) { clearTimeout(lp.timer); lp.timer = null; }
+  }
+
+  function bindLongPress() {
+    document.addEventListener('touchstart', function (e) {
+      var t = e.touches && e.touches[0];
+      var el = t && e.target && e.target.closest ? e.target.closest('.ex-en') : null;
+      cancelLongPress();
+      if (!el) return;
+      lp.x = t.clientX; lp.y = t.clientY;
+      lp.timer = setTimeout(function () {
+        lp.timer = null;
+        selectWordAt(lp.x, lp.y);
+      }, 500);
+    }, { passive: true });
+    document.addEventListener('touchmove', function (e) {
+      var t = e.touches && e.touches[0];
+      if (!lp.timer || !t) return;
+      if (Math.abs(t.clientX - lp.x) > 10 || Math.abs(t.clientY - lp.y) > 10) cancelLongPress();
+    }, { passive: true });
+    document.addEventListener('touchend', cancelLongPress);
+    document.addEventListener('touchcancel', cancelLongPress);
   }
 
   /* ================= 事件绑定 ================= */
