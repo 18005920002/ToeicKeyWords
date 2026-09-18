@@ -154,7 +154,11 @@ body {
 /* ---------- 布局 ---------- */
 .layout { display: flex; gap: 22px; align-items: flex-start; padding: 22px; max-width: 1240px; margin: 0 auto; }
 
-.sidebar { width: 236px; flex: none; position: sticky; top: 76px; }
+.sidebar {
+  width: 236px; flex: none;
+  position: sticky; top: 76px;
+  max-height: calc(100vh - 96px); overflow-y: auto;   /* 单元多了不要把页面撑长一大截 */
+}
 /* 收起时整个侧栏不占位，卡片区拿到全部宽度（容器查询会自动换成双栏卡片） */
 body:not(.nav-open) .sidebar { display: none; }
 .side-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
@@ -204,6 +208,7 @@ body:not(.nav-open) .sidebar { display: none; }
 /* ---------- 词汇卡片（每个词条独占一行 · 单面展示全部字段） ---------- */
 .cards {
   container-type: inline-size;   /* 按卡片可用宽度而非视口排版：侧栏收起 / 平板横屏时自动展开 */
+  container-name: cards;         /* 下面的具名 @container 只认有名字的容器，漏写会让双栏排版失效 */
   display: flex;
   flex-direction: column;
   gap: 12px;

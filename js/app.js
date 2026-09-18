@@ -270,10 +270,20 @@
     }).join('');
     $('#topicList').innerHTML = html;
 
-    var customCount = state.topics.filter(function (t) { return t.custom; }).length;
-    $('#customTip').textContent = customCount
+    var customCount = state.topics.filter(function (t) { return t.custom && t.id !== EXT_ID; }).length;
+    var tip = customCount
       ? '已导入 ' + customCount + ' 个自定义词库，点右上角 ✕ 可删除。'
       : '导入的自定义词库会显示在这里。';
+    var ext = null;
+    state.topics.forEach(function (t) { if (t.id === EXT_ID) ext = t; });
+    if (ext && ext.words.length) tip = '长按例句中的词可加入 ' + EXT_NAME + '（当前 ' + ext.words.length + ' 词）。' + tip;
+    $('#customTip').textContent = tip;
+  }
+
+  /* 单元副标题：说清这个单元的词是从哪来的 */
+  function topicNote(topic) {
+    if (topic.id === EXT_ID) return '（长按 / 选中例句中的词加入，音标与释义待人工补齐）';
+    return topic.custom ? '（自定义导入）' : '';
   }
 
   function badgeHtml(mark) {
@@ -315,7 +325,7 @@
         '</div>';
     }
     if (word.exampleCn) html += '<p class="ex-cn">' + escapeHtml(word.exampleCn) + '</p>';
-    if (word.from) html += '<p class="muted ex-from">例句摘自 ' + escapeHtml(word.from) + '，人工补齐时核对一下上下文</p>';
+    if (word.from) html += '<p class="muted ex-from">摘自 ' + escapeHtml(word.from) + ' 的例句</p>';
     return html + '</div>';
   }
 
@@ -382,7 +392,7 @@
       $('#topicTitle').textContent = topic.icon + ' ' + topic.name;
       $('#topicMeta').textContent = (topic.id === ALL_ID
         ? '全部 ' + state.topics.length + ' 个单元，共 '
-        : '本单元共 ') + topic.words.length + ' 词' + (topic.custom ? '（自定义导入）' : '');
+        : '本单元共 ') + topic.words.length + ' 词' + topicNote(topic);
     }
     $('#counters').innerHTML =
       '<span class="c-new">生词 <b>' + counts.new + '</b></span>' +
@@ -394,10 +404,11 @@
     empty.classList.toggle('hidden', words.length > 0);
     empty.textContent = (state.search && state.search.trim())
       ? '没有匹配「' + state.search.trim() + '」的词汇，换个关键词或筛选条件试试。'
-      : '当前筛选条件下没有词汇（点上方「全部」查看所有）。';
+      : '当前筛选条件下没有词汇（点顶部 🔍 展开筛选，换「全部」查看所有）。';
     /* 卡片重建完了再把连读的高亮贴回去，否则标一个生词就会丢当前词 */
     syncPlayBtn(scope, words);
     syncPlayHighlight();
+    syncFoldUI();        // 检索 / 筛选条件变了，顶部 🔍 的生效标记跟着变
   }
 
   function renderOverall() {
@@ -749,6 +760,11 @@
     return id;
   }
 
+  /* 待补充的扩展词只有词条 + 例句，填了任何一个字段就算人工补齐过了 */
+  function isFilled(w) {
+    return !!(w && (String(w.phonetic || '').trim() || String(w.englishDef || '').trim() || String(w.meaning || '').trim() || String(w.pos || '').trim()));
+  }
+
   function applyImport(text, fileName) {
     var data = JSON.parse(text);
     var fallback = String(fileName || '').replace(/\.json$/i, '').trim() || '自定义词汇';
@@ -770,7 +786,7 @@
     }
 
     var stored = Store.getCustomTopics();
-    var addedWords = 0, skipped = 0, newTopics = 0, lastTopicName = '';
+    var addedWords = 0, skipped = 0, updated = 0, newTopics = 0, lastTopicName = '';
 
     topics.forEach(function (t) {
       var name = t.name;
@@ -796,11 +812,22 @@
         addedWords += fresh.words.length;
       } else {
         var index = {};
-        existing.words.forEach(function (w) { index[String(w.word).trim().toLowerCase()] = true; });
+        existing.words.forEach(function (w) { index[String(w.word).trim().toLowerCase()] = w; });
         clean.words.forEach(function (w) {
           var k = w.word.toLowerCase();
-          if (index[k]) { skipped++; return; }
-          index[k] = true;
+          var old = index[k];
+          if (old) {
+            /* 已存在的词默认跳过；但旧的还是「待补充」占位、新的带了实际内容时覆盖，
+             * 这样扩展词导出后人工补齐再导入就能生效 */
+            if (old.pending && isFilled(w)) {
+              existing.words[existing.words.indexOf(old)] = stripKey(w);
+              updated++;
+            } else {
+              skipped++;
+            }
+            return;
+          }
+          index[k] = w;
           existing.words.push(stripKey(w));
           addedWords++;
         });
@@ -808,7 +835,7 @@
       lastTopicName = name;
     });
 
-    if (!addedWords && !restoreMarks) {
+    if (!addedWords && !updated && !restoreMarks) {
       toast('导入完成：词汇已存在，新增 0 个，跳过 ' + skipped + ' 个');
       return;
     }
@@ -825,7 +852,7 @@
     var hit = state.topics.filter(function (t) { return t.name === lastTopicName; }).pop();
     if (hit) { state.topicId = hit.id; Store.setPref('topicId', hit.id); }
     renderAll();
-    toast('导入成功：新增 ' + addedWords + ' 个词汇' + (newTopics ? '，新建 ' + newTopics + ' 个主题' : '') + (skipped ? '（跳过重复 ' + skipped + '）' : ''));
+    toast('导入成功：新增 ' + addedWords + ' 个词汇' + (updated ? '，补齐 ' + updated + ' 个待补充词' : '') + (newTopics ? '，新建 ' + newTopics + ' 个主题' : '') + (skipped ? '（跳过重复 ' + skipped + '）' : ''));
   }
 
   function readFile(file) {
@@ -1113,12 +1140,13 @@
     };
     $('#selWord').textContent = info.text;
     pop.classList.remove('hidden');
-    /* 贴在选区上方，放不下就翻到下方，横向夹进视口 */
+    /* 贴在选区上方，放不下就翻到下方，最后再夹进视口（选区靠边时浮层不能跌出屏） */
     var r = info.rect;
     var pw = pop.offsetWidth, ph = pop.offsetHeight;
     var left = Math.max(8, Math.min(r.left + r.width / 2 - pw / 2, window.innerWidth - pw - 8));
     var top = r.top - ph - 10;
-    if (top < 8) top = Math.min(r.bottom + 10, Math.max(8, window.innerHeight - ph - 8));
+    if (top < 8) top = r.bottom + 10;
+    top = Math.max(8, Math.min(top, Math.max(8, window.innerHeight - ph - 8)));
     pop.style.left = Math.round(left) + 'px';
     pop.style.top = Math.round(top) + 'px';
   }
@@ -1204,11 +1232,11 @@
     var ext = extTopicOf(stored);
     var dup = ext.words.some(function (w) { return String(w.word).trim().toLowerCase() === lower; });
     if (dup) {
-      toast('「' + word + '」已经在 ' + EXT_NAME + ' 里了');
+      toast('「' + word + '」已经收进「' + EXT_NAME + '」了');
       clearSel(); clearTextSelection();
       return;
     }
-    /* 例句沿用当前句（含中文注释），音标 / 词性 / 注释 / 读音全部留空，卡片上展占位符 */
+    /* 例句沿用当前句（含中文注释），音标 / 词性 / 注释 / 读音全部留空，卡片上显示占位符 */
     ext.words.push({
       word: word,
       phonetic: '', pos: '', englishDef: '', meaning: '',
@@ -1221,13 +1249,11 @@
     state.topics = buildTopics();
     clearSel();
     clearTextSelection();
-    if (isNarrow()) state.fold.nav = false;
-    Store.setPref('navOpen', state.fold.nav);
+    if (isNarrow()) setNavOpen(false);        // 抽屉模式下别挡住刚加进去的词
     state.topicId = EXT_ID;
     Store.setPref('topicId', EXT_ID);
     state.flipped = {};
     renderAll();
-    syncFoldUI();
     toast('已加入 ' + EXT_NAME + '：' + word + '（音标 / 读音 / 释义待补充）' + (home ? '，注：该词已在 ' + home : ''));
   }
 
@@ -1335,6 +1361,9 @@
       if (!btn) return;
       var act = btn.dataset.act;
 
+      /* 刚在例句里选完词，这一下是拖选的尾巴，别再整句朗读 */
+      if (act.indexOf('speak-example') === 0 && selectionInside(btn)) return;
+
       if (act === 'speak') { speakWord(word); return; }
       if (act === 'speak-acc') { speakWord(word, btn.dataset.accent); return; }
       if (act === 'speak-example') { speakExampleAll(word, false); return; }
@@ -1350,6 +1379,7 @@
     $('#vFlip').addEventListener('click', flipViewer);
     /* 浏览卡片内的朗读/口音按钮不触发翻面 */
     $('#viewerFlip').addEventListener('click', function (e) {
+      if (selectionInside(this)) return;                     // 在例句里选词，不是翻面
       var btn = e.target.closest('[data-act]');
       if (btn && btn.dataset.act === 'speak-example') { speakExampleAll(viewerWord(), false); return; }
       if (btn && btn.dataset.act === 'speak-example-slow') { speakExample(viewerWord(), true); return; }
@@ -1409,6 +1439,7 @@
       if (e.key === 'Escape') { e.preventDefault(); stopUnitPlay(); }
     });
 
+    bindFoldAndSelection();
     bindTtsPanel();
   }
 
@@ -1433,8 +1464,12 @@
     $$('#filters .chip').forEach(function (b) {
       b.classList.toggle('is-active', b.dataset.filter === state.filter);
     });
+    /* 两个区域默认折叠，上次展开过就记着上次的位置 */
+    state.fold.search = !!Store.getPref('searchOpen', false);
+    state.fold.nav = !!Store.getPref('navOpen', false);
     bindEvents();
     renderAll();
+    syncFoldUI();
     syncAccentUI();
   }
 

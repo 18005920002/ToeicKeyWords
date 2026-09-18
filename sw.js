@@ -9,7 +9,7 @@
  */
 'use strict';
 
-var CACHE_VERSION = 'toeic-v3';
+var CACHE_VERSION = 'toeic-v4';
 var SHELL_CACHE = CACHE_VERSION + '-shell';
 /* 音频缓存故意不带版本号：mp3 文件名里含词条 hash，同名的内容不会变，
  * 而升版会删掉旧名字的缓存 —— 把 105MB 发音一并清掉、让用户重下一遍是无妄之灾 */
